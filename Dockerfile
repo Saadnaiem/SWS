@@ -7,9 +7,12 @@ RUN apt-get update && apt-get install -y \
     unzip \
     xvfb \
     libxi6 \
-    libgconf-2-4 \
-    default-jdk \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    libgbm1 \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Google Chrome
