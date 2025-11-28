@@ -1,0 +1,16 @@
+name: sws
+services:
+- name: web
+  github:
+    repo: Saadnaiem/SWS
+    branch: main
+    deploy_on_push: true
+  dockerfile_path: Dockerfile
+  http_port: 5500
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  envs:
+  - key: PORT
+    value: "5500"
+  - key: HOST
+    value: "0.0.0.0"
