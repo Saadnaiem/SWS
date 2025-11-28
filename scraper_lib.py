@@ -65,12 +65,24 @@ def get_driver(headless=False):
             options.binary_location = chrome_binary_path
         
         if headless:
-            options.add_argument("--headless")
+            # Use --headless=new for better compatibility
+            options.add_argument("--headless=new")
             
-        driver = uc.Chrome(options=options, use_subprocess=True)
+        # Specify version_main to avoid patching issues if possible
+        # On Render, we install the latest stable, which is likely 131 or 130.
+        # We can try to let UC find it, or specify it.
+        # Setting use_subprocess=True is good.
+        driver = uc.Chrome(options=options, use_subprocess=True, version_main=131)
         return driver
     except Exception as e:
         print(f"Method 0 (UC) failed: {e}")
+        # Try without version_main if it failed
+        try:
+            print("Retrying Method 0 without version_main...")
+            driver = uc.Chrome(options=options, use_subprocess=True)
+            return driver
+        except Exception as e2:
+            print(f"Method 0 (UC) retry failed: {e2}")
 
     # Standard Selenium Options
     options = webdriver.ChromeOptions()
