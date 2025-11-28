@@ -128,6 +128,8 @@ def show_results(req_id):
     filename = SCRAPE_RESULTS.get(req_id)
     if filename and os.path.exists(filename):
         df = pd.read_csv(filename)
+        # Fill NaN values with empty string to avoid template errors
+        df = df.fillna('')
         data = df.to_dict('records')
         columns = df.columns.values
         return render_template('results.html', 
