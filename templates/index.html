@@ -147,22 +147,44 @@
     </style>
     <script>
         function startScraping(event) {
-            // Generate a random ID for this request
-            const reqId = 'req_' + Math.random().toString(36).substr(2, 9);
-            document.getElementById('req_id').value = reqId;
+        function startScraping(event) {
+            event.preventDefault(); // Prevent default form submission
+            
+            const form = event.target;
+            const formData = new FormData(form);
             
             // Show UI
             document.getElementById('progress-ui').style.display = 'block';
             document.getElementById('loadingSpinner').style.display = 'block';
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').innerText = 'Scraping in progress...';
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Scraping in progress...';
             
+            // Send POST request
+            fetch('/scrape', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const reqId = data.req_id;
+                startPolling(reqId);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to start scraping task.');
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Start Scraping';
+            });
+        }
+
+        function startPolling(reqId) {
             // Start Timers
             const startTime = Date.now();
             const timeEl = document.getElementById('timer');
             
             // Timer Interval
-            setInterval(() => {
+            const timerInterval = setInterval(() => {
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 const mins = Math.floor(elapsed / 60);
                 const secs = elapsed % 60;
@@ -170,23 +192,31 @@
             }, 1000);
             
             // Polling Interval
-            setInterval(() => {
+            const pollInterval = setInterval(() => {
                 fetch('/progress/' + reqId)
                     .then(response => response.json())
                     .then(data => {
-                        document.getElementById('page-count').innerText = data.page;
-                        document.getElementById('prod-count').innerText = data.count;
+                        document.getElementById('page-count').innerText = data.page || 0;
+                        document.getElementById('prod-count').innerText = data.count || 0;
                         
-                        // Fake progress bar movement since we don't know total
-                        // Just keep it moving slowly or based on count
-                        let fakeProgress = (data.count % 100) + 10; 
+                        // Fake progress bar movement
+                        let fakeProgress = ((data.count || 0) % 100) + 10; 
                         document.getElementById('prog-fill').style.width = fakeProgress + '%';
+
+                        if (data.status === 'completed') {
+                            clearInterval(timerInterval);
+                            clearInterval(pollInterval);
+                            window.location.href = '/results/' + reqId;
+                        } else if (data.status === 'error') {
+                            clearInterval(timerInterval);
+                            clearInterval(pollInterval);
+                            alert('Scraping failed: ' + data.message);
+                            document.getElementById('submitBtn').disabled = false;
+                            document.getElementById('submitBtn').innerText = 'Start Scraping';
+                        }
                     })
                     .catch(err => console.log(err));
-            }, 1000);
-            
-            // Allow form to submit normally
-            return true;
+            }, 2000); // Poll every 2 seconds
         }
     </script>
 </head>
@@ -196,8 +226,7 @@
         <h3>Modern Web Scraping Tool</h3>
         
         <div class="card">
-            <form action="/scrape" method="post" onsubmit="return startScraping(event)">
-                <input type="hidden" name="req_id" id="req_id">
+            <form onsubmit="startScraping(event)">
                 <p>Enter the target URL below:</p>
                 <input type="text" name="url" placeholder="https://www.nahdionline.com/en-sa/..." required>
                 
@@ -215,20 +244,6 @@
                 <button type="submit" id="submitBtn">Start Scraping</button>
             </form>
             
-            <script>
-                // Show proxy input only if Al-Dawaa is detected in URL (simple check)
-                const urlInput = document.querySelector('input[name="url"]');
-                const proxySection = document.getElementById('proxy-section');
-                
-                urlInput.addEventListener('input', function() {
-                    if (this.value.includes('al-dawaa') || this.value.includes('aldawaa')) {
-                        proxySection.style.display = 'block';
-                    } else {
-                        proxySection.style.display = 'none';
-                    }
-                });
-            </script>
-
             <div class="spinner" id="loadingSpinner"></div>
 
             <div class="progress-container" id="progress-ui">
