@@ -1,36 +1,45 @@
 FROM python:3.11-slim
 
-# Suppress pip root user warning
-ENV PIP_ROOT_USER_ACTION=ignore
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     unzip \
+    xvfb \
+    libxi6 \
+    libgconf-2-4 \
+    default-jdk \
     curl \
-    ca-certificates \
-    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome Stable directly from .deb
-# This avoids issues with apt-key and GPG keys
-RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+# Install Google Chrome
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y ./google-chrome-stable_current_amd64.deb \
-    && rm google-chrome-stable_current_amd64.deb \
+    && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up workspace
+# Set up working directory
 WORKDIR /app
 
 # Copy requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy app code
 COPY . .
 
-# Run command
-# Render sets the PORT environment variable automatically
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 600
+# Make start script executable
+RUN chmod +x start.sh
+
+# Set environment variables
+ENV PORT=5500
+ENV HOST=0.0.0.0
+ENV DISPLAY=:99
+ENV PYTHONUNBUFFERED=1
+
+# Expose the port
+EXPOSE 5500
+
+# Run the application
+CMD ["./start.sh"]

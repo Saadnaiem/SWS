@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, session, jsonify
+from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
 import io
 import os
@@ -35,22 +35,55 @@ def generate_filename_from_url(url):
 
 @app.route('/')
 def index():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        import traceback
-        return f"<h1>Internal Server Error</h1><pre>{traceback.format_exc()}</pre>", 500
-
-@app.route('/health')
-def health():
-    return "OK", 200
+    return render_template('index.html')
 
 @app.route('/progress/<req_id>')
 def progress(req_id):
     return jsonify(SCRAPE_STATUS.get(req_id, {'page': 0, 'count': 0, 'status': 'unknown'}))
 
+@app.route('/download/<req_id>')
+def download(req_id):
+    filename = SCRAPE_RESULTS.get(req_id)
+    if not filename or not os.path.exists(filename):
+        return "File not found", 404
+    
+    return send_file(
+        filename,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='text/csv'
+    )
+
+@app.route('/results/<req_id>')
+def results(req_id):
+    filename = SCRAPE_RESULTS.get(req_id)
+    status = SCRAPE_STATUS.get(req_id, {})
+    
+    if not filename or not os.path.exists(filename):
+        return "File not found", 404
+    
+    try:
+        df = pd.read_csv(filename)
+        # Convert NaN to empty string for better display
+        df = df.fillna('')
+        products = df.to_dict('records')
+        columns = df.columns.tolist()
+        
+        return render_template(
+            'results.html',
+            products=products,
+            columns=columns,
+            count=status.get('count', 0),
+            pages=status.get('page', 0),
+            time_elapsed=status.get('elapsed', '0s'),
+            req_id=req_id
+        )
+    except Exception as e:
+        return f"Error reading results: {str(e)}", 500
+
 def run_scrape_task(req_id, url, headless_mode):
     print(f"Task started for {req_id}")
+    start_time = time.time()
     try:
         driver = get_driver(headless=headless_mode)
         
@@ -65,6 +98,11 @@ def run_scrape_task(req_id, url, headless_mode):
         
         driver.quit()
         
+        end_time = time.time()
+        elapsed_seconds = int(end_time - start_time)
+        mins, secs = divmod(elapsed_seconds, 60)
+        elapsed_str = f"{mins}m {secs}s"
+        
         # Save results
         if data:
             # Add numbering
@@ -75,12 +113,16 @@ def run_scrape_task(req_id, url, headless_mode):
                 enriched_data.append(new_item)
                 
             df = pd.DataFrame(enriched_data)
-            # Save to a unique file for this request
-            filename = f"scraped_results_{req_id}.csv"
+            filename = generate_filename_from_url(url)
             df.to_csv(filename, index=False, encoding='utf-8-sig')
+            
             SCRAPE_RESULTS[req_id] = filename
-            SCRAPE_STATUS[req_id]['status'] = 'completed'
-            SCRAPE_STATUS[req_id]['count'] = len(data)
+            SCRAPE_STATUS[req_id] = {
+                'status': 'completed',
+                'count': len(data),
+                'page': SCRAPE_STATUS.get(req_id, {}).get('page', 0),
+                'elapsed': elapsed_str
+            }
             print(f"Task {req_id} completed. Saved to {filename}")
         else:
             SCRAPE_STATUS[req_id]['status'] = 'failed'
@@ -94,62 +136,22 @@ def run_scrape_task(req_id, url, headless_mode):
 @app.route('/scrape', methods=['POST'])
 def scrape():
     url = request.form.get('url')
-    req_id = request.form.get('req_id')
     headless_mode = request.form.get('headless') == 'true'
     
     if not url:
-        return jsonify({'error': "Please enter a valid URL"}), 400
-    
-    if not req_id:
-        req_id = f"req_{int(time.time())}"
-    
-    # Initialize status
+        return jsonify({'error': 'URL is required'}), 400
+
+    req_id = str(uuid.uuid4())
     SCRAPE_STATUS[req_id] = {'page': 0, 'count': 0, 'status': 'starting'}
     
-    # Start background thread
     thread = threading.Thread(target=run_scrape_task, args=(req_id, url, headless_mode))
-    thread.daemon = True
     thread.start()
     
-    return jsonify({'status': 'started', 'req_id': req_id})
-
-@app.route('/download/<req_id>')
-def download_file(req_id):
-    filename = SCRAPE_RESULTS.get(req_id)
-    if filename and os.path.exists(filename):
-        # Get original URL to generate a nice name if possible, or just use default
-        download_name = "scraped_products.csv" 
-        return send_file(filename, as_attachment=True, download_name=download_name)
-    else:
-        return "File not found or expired", 404
-
-@app.route('/results/<req_id>')
-def show_results(req_id):
-    filename = SCRAPE_RESULTS.get(req_id)
-    if filename and os.path.exists(filename):
-        df = pd.read_csv(filename)
-        # Fill NaN values with empty string to avoid template errors
-        df = df.fillna('')
-        data = df.to_dict('records')
-        columns = df.columns.values
-        return render_template('results.html', 
-                               products=data, 
-                               columns=columns, 
-                               count=len(data),
-                               pages=SCRAPE_STATUS.get(req_id, {}).get('page', 0),
-                               time_elapsed="N/A", # We didn't store time, but that's fine for now
-                               filename="scraped_products.csv",
-                               req_id=req_id) # Pass req_id for download link
-    else:
-        return "Results not found or expired", 404
-
-@app.route('/download')
-def download():
-    filename = request.args.get('name', 'scraped_products.csv')
-    try:
-        return send_file("scraped_results.csv", as_attachment=True, download_name=filename)
-    except Exception as e:
-        return str(e)
+    return jsonify({'req_id': req_id})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    import os
+    port = int(os.environ.get('PORT', 5500))
+    host = os.environ.get('HOST', '127.0.0.1')
+    print(f"Starting Flask server on http://{host}:{port}")
+    app.run(debug=True, host=host, port=port)
