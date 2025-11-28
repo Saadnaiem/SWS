@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: SMS
-    env: docker
-    plan: free
-    branch: main
-    envVars:
-      - key: PORT
-        value: 5500
