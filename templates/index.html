@@ -174,9 +174,13 @@
     </style>
     <script>
         function startScraping(event) {
+            event.preventDefault();
+            
             // Generate a random ID for this request
             const reqId = 'req_' + Math.random().toString(36).substr(2, 9);
             document.getElementById('req_id').value = reqId;
+            
+            const formData = new FormData(event.target);
             
             // Show UI
             document.getElementById('progress-ui').style.display = 'block';
@@ -189,31 +193,55 @@
             const timeEl = document.getElementById('timer');
             
             // Timer Interval
-            setInterval(() => {
+            const timerInterval = setInterval(() => {
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 const mins = Math.floor(elapsed / 60);
                 const secs = elapsed % 60;
                 timeEl.innerText = `${mins}m ${secs}s`;
             }, 1000);
             
-            // Polling Interval
-            setInterval(() => {
-                fetch('/progress/' + reqId)
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById('page-count').innerText = data.page;
-                        document.getElementById('prod-count').innerText = data.count;
-                        
-                        // Fake progress bar movement since we don't know total
-                        // Just keep it moving slowly or based on count
-                        let fakeProgress = (data.count % 100) + 10; 
-                        document.getElementById('prog-fill').style.width = fakeProgress + '%';
-                    })
-                    .catch(err => console.log(err));
-            }, 1000);
+            // Send Request
+            fetch('/scrape', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Polling Interval
+                const pollInterval = setInterval(() => {
+                    fetch('/progress/' + reqId)
+                        .then(response => response.json())
+                        .then(data => {
+                            document.getElementById('page-count').innerText = data.page;
+                            document.getElementById('prod-count').innerText = data.count;
+                            
+                            // Fake progress bar movement
+                            let fakeProgress = (data.count % 100) + 10; 
+                            document.getElementById('prog-fill').style.width = fakeProgress + '%';
+                            
+                            if (data.status === 'completed') {
+                                clearInterval(pollInterval);
+                                clearInterval(timerInterval);
+                                window.location.href = '/results/' + reqId;
+                            } else if (data.status === 'failed') {
+                                clearInterval(pollInterval);
+                                clearInterval(timerInterval);
+                                alert('Scraping failed: ' + (data.error || 'Unknown error'));
+                                document.getElementById('submitBtn').disabled = false;
+                                document.getElementById('submitBtn').innerText = 'Start Scraping';
+                            }
+                        })
+                        .catch(err => console.log(err));
+                }, 2000);
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Failed to start scraping");
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('submitBtn').innerText = 'Start Scraping';
+            });
             
-            // Allow form to submit normally
-            return true;
+            return false;
         }
     </script>
 </head>

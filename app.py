@@ -4,13 +4,16 @@ import io
 import os
 import time
 import re
+import threading
+import uuid
 from scraper_lib import get_driver, scrape_nahdi, scrape_aldawaa
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Global dictionary to store progress
+# Global dictionary to store progress and results
 SCRAPE_STATUS = {}
+SCRAPE_RESULTS = {}
 
 def generate_filename_from_url(url):
     try:
@@ -32,95 +35,111 @@ def generate_filename_from_url(url):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        import traceback
+        return f"<h1>Internal Server Error</h1><pre>{traceback.format_exc()}</pre>", 500
+
+@app.route('/health')
+def health():
+    return "OK", 200
 
 @app.route('/progress/<req_id>')
 def progress(req_id):
     return jsonify(SCRAPE_STATUS.get(req_id, {'page': 0, 'count': 0, 'status': 'unknown'}))
 
+def run_scrape_task(req_id, url, headless_mode):
+    print(f"Task started for {req_id}")
+    try:
+        driver = get_driver(headless=headless_mode)
+        
+        def update_status(page, count):
+            SCRAPE_STATUS[req_id] = {'page': page, 'count': count, 'status': 'scraping'}
+
+        data = []
+        if "nahdi" in url.lower():
+            data = scrape_nahdi(driver, url, status_callback=update_status)
+        elif "al-dawaa" in url.lower():
+            data = scrape_aldawaa(driver, url, status_callback=update_status)
+        
+        driver.quit()
+        
+        # Save results
+        if data:
+            # Add numbering
+            enriched_data = []
+            for i, item in enumerate(data, 1):
+                new_item = {'No.': i}
+                new_item.update(item)
+                enriched_data.append(new_item)
+                
+            df = pd.DataFrame(enriched_data)
+            # Save to a unique file for this request
+            filename = f"scraped_results_{req_id}.csv"
+            df.to_csv(filename, index=False, encoding='utf-8-sig')
+            SCRAPE_RESULTS[req_id] = filename
+            SCRAPE_STATUS[req_id]['status'] = 'completed'
+            SCRAPE_STATUS[req_id]['count'] = len(data)
+            print(f"Task {req_id} completed. Saved to {filename}")
+        else:
+            SCRAPE_STATUS[req_id]['status'] = 'failed'
+            SCRAPE_STATUS[req_id]['error'] = 'No data found'
+            
+    except Exception as e:
+        print(f"Task {req_id} failed: {e}")
+        SCRAPE_STATUS[req_id]['status'] = 'failed'
+        SCRAPE_STATUS[req_id]['error'] = str(e)
+
 @app.route('/scrape', methods=['POST'])
 def scrape():
     url = request.form.get('url')
     req_id = request.form.get('req_id')
-    headless_mode = request.form.get('headless') == 'true' # Checkbox value
+    headless_mode = request.form.get('headless') == 'true'
     
     if not url:
-        return render_template('index.html', error="Please enter a valid URL")
+        return jsonify({'error': "Please enter a valid URL"}), 400
+    
+    if not req_id:
+        req_id = f"req_{int(time.time())}"
     
     # Initialize status
-    if req_id:
-        SCRAPE_STATUS[req_id] = {'page': 0, 'count': 0, 'status': 'running'}
-        
-    def update_status(page, count):
-        if req_id:
-            SCRAPE_STATUS[req_id] = {'page': page, 'count': count, 'status': 'running'}
+    SCRAPE_STATUS[req_id] = {'page': 0, 'count': 0, 'status': 'starting'}
+    
+    # Start background thread
+    thread = threading.Thread(target=run_scrape_task, args=(req_id, url, headless_mode))
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({'status': 'started', 'req_id': req_id})
 
-    try:
-        # Use headless mode based on user selection
-        print(f"Starting scrape for URL: {url}")
-        print(f"Headless Mode: {headless_mode}")
-        
-        start_time = time.time()
-        driver = get_driver(headless=headless_mode)
-        
-        data = []
-        if "nahdi" in url.lower():
-            print("Scraping Nahdi...")
-            data = scrape_nahdi(driver, url, status_callback=update_status)
-        elif "al-dawaa" in url.lower():
-            print("Scraping Al-Dawaa...")
-            data = scrape_aldawaa(driver, url, status_callback=update_status)
-        else:
-            driver.quit()
-            return render_template('index.html', error="Unknown URL. Please use Nahdi or Al-Dawaa.")
-            
-        driver.quit()
-        end_time = time.time()
-        
-        # Calculate stats
-        elapsed_seconds = int(end_time - start_time)
-        mins, secs = divmod(elapsed_seconds, 60)
-        time_str = f"{mins}m {secs}s"
-        
-        pages_scraped = 0
-        if req_id and req_id in SCRAPE_STATUS:
-            pages_scraped = SCRAPE_STATUS[req_id].get('page', 0)
-            SCRAPE_STATUS[req_id]['status'] = 'completed'
-        
-        print(f"Scraping finished. Found {len(data)} items in {time_str}.")
-        
-        if data:
-            # Add numbering and reorder columns
-            enriched_data = []
-            for i, item in enumerate(data, 1):
-                # Create new dict with 'No.' as first key
-                new_item = {'No.': i}
-                new_item.update(item)
-                enriched_data.append(new_item)
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(enriched_data)
-            
-            # Save to a temporary CSV for download
-            temp_file = "scraped_results.csv"
-            df.to_csv(temp_file, index=False)
-            
-            # Generate filename
-            download_filename = generate_filename_from_url(url)
-            
-            # Pass data and columns to template for custom rendering
-            return render_template('results.html', 
-                                   products=enriched_data, 
-                                   columns=df.columns.values, 
-                                   count=len(data),
-                                   pages=pages_scraped,
-                                   time_elapsed=time_str,
-                                   filename=download_filename)
-        else:
-            return render_template('index.html', error="No data found.")
-            
-    except Exception as e:
-        return render_template('index.html', error=f"An error occurred: {str(e)}")
+@app.route('/download/<req_id>')
+def download_file(req_id):
+    filename = SCRAPE_RESULTS.get(req_id)
+    if filename and os.path.exists(filename):
+        # Get original URL to generate a nice name if possible, or just use default
+        download_name = "scraped_products.csv" 
+        return send_file(filename, as_attachment=True, download_name=download_name)
+    else:
+        return "File not found or expired", 404
+
+@app.route('/results/<req_id>')
+def show_results(req_id):
+    filename = SCRAPE_RESULTS.get(req_id)
+    if filename and os.path.exists(filename):
+        df = pd.read_csv(filename)
+        data = df.to_dict('records')
+        columns = df.columns.values
+        return render_template('results.html', 
+                               products=data, 
+                               columns=columns, 
+                               count=len(data),
+                               pages=SCRAPE_STATUS.get(req_id, {}).get('page', 0),
+                               time_elapsed="N/A", # We didn't store time, but that's fine for now
+                               filename="scraped_products.csv",
+                               req_id=req_id) # Pass req_id for download link
+    else:
+        return "Results not found or expired", 404
 
 @app.route('/download')
 def download():
