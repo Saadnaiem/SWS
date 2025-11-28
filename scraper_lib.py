@@ -53,12 +53,16 @@ def get_driver(headless=False):
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+        options.add_argument("--blink-settings=imagesEnabled=false") # Disable images for speed
+        options.add_argument("--disable-extensions")
+        options.add_argument("--dns-prefetch-disable")
         
         if headless:
             options.add_argument("--headless=new")
             
         # Try without version_main first, let UC detect it
         driver = uc.Chrome(options=options, use_subprocess=True)
+        driver.set_page_load_timeout(30) # Set timeout
         return driver
     except Exception as e:
         print(f"Method 0 (UC) failed: {e}")
@@ -66,6 +70,7 @@ def get_driver(headless=False):
         try:
             print("Retrying Method 0 with version_main=131...")
             driver = uc.Chrome(options=options, use_subprocess=True, version_main=131)
+            driver.set_page_load_timeout(30)
             return driver
         except Exception as e2:
             print(f"Method 0 (UC) retry failed: {e2}")
@@ -76,6 +81,7 @@ def get_driver(headless=False):
     options.add_argument("--log-level=3") 
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--blink-settings=imagesEnabled=false")
     
     if headless:
         options.add_argument("--headless=new")
@@ -129,17 +135,22 @@ def scrape_nahdi(driver, base_url, status_callback=None):
         if status_callback:
             status_callback(page=page, count=len(products))
         
-        driver.get(url)
+        print(f"Scraping page {page}: {url}")
+        try:
+            driver.get(url)
+        except TimeoutException:
+            print(f"Timeout loading page {page}")
+            break
         
         # Wait for products to appear
         try:
-            WebDriverWait(driver, 15).until(
+            WebDriverWait(driver, 8).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a.flex.h-full.flex-col"))
             )
         except:
             pass
             
-        time.sleep(random.uniform(2, 4))
+        time.sleep(random.uniform(1, 2))
         
         try:
             last_height = driver.execute_script("return document.body.scrollHeight")

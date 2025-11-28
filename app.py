@@ -88,6 +88,7 @@ def run_scrape_task(req_id, url, headless_mode):
         driver = get_driver(headless=headless_mode)
         
         def update_status(page, count):
+            print(f"Req {req_id}: Page {page}, Count {count}")
             SCRAPE_STATUS[req_id] = {'page': page, 'count': count, 'status': 'scraping'}
 
         data = []
