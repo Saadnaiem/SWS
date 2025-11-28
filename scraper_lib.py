@@ -68,18 +68,15 @@ def get_driver(headless=False):
             # Use --headless=new for better compatibility
             options.add_argument("--headless=new")
             
-        # Specify version_main to avoid patching issues if possible
-        # On Render, we install the latest stable, which is likely 131 or 130.
-        # We can try to let UC find it, or specify it.
-        # Setting use_subprocess=True is good.
-        driver = uc.Chrome(options=options, use_subprocess=True, version_main=131)
+        # Try without version_main first, let UC detect it
+        driver = uc.Chrome(options=options, use_subprocess=True)
         return driver
     except Exception as e:
         print(f"Method 0 (UC) failed: {e}")
-        # Try without version_main if it failed
+        # Retry with version_main=131 as fallback (only if detection fails)
         try:
-            print("Retrying Method 0 without version_main...")
-            driver = uc.Chrome(options=options, use_subprocess=True)
+            print("Retrying Method 0 with version_main=131...")
+            driver = uc.Chrome(options=options, use_subprocess=True, version_main=131)
             return driver
         except Exception as e2:
             print(f"Method 0 (UC) retry failed: {e2}")
