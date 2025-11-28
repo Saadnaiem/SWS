@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saad Web Scraper (SWS)</title>
+    <style>
+        body {
+            background-color: #0a192f;
+            color: #ccd6f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            padding: 2rem;
+            text-align: center;
+        }
+        h1 {
+            color: #e6f1ff;
+            margin-bottom: 0.5rem;
+        }
+        h3 {
+            color: #64ffda;
+            margin-top: 0;
+            font-weight: normal;
+        }
+        .card {
+            background-color: #112240;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px -15px rgba(2,12,27,0.7);
+            margin-top: 2rem;
+        }
+        input[type="text"] {
+            width: 80%;
+            padding: 12px;
+            margin: 10px 0;
+            background-color: #0a192f;
+            border: 1px solid #233554;
+            color: #ccd6f6;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #64ffda;
+        }
+        button {
+            background-color: #64ffda;
+            color: #0a192f;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #4adbc8;
+        }
+        .info {
+            margin-top: 2rem;
+            text-align: left;
+            font-size: 0.9rem;
+            color: #8892b0;
+        }
+        .error {
+            color: #ff6b6b;
+            margin-top: 1rem;
+            padding: 10px;
+            background-color: rgba(255, 107, 107, 0.1);
+            border-radius: 4px;
+        }
+        /* Progress UI */
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+            text-align: left;
+            background: #0a192f;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        .metric span:first-child {
+            color: #8892b0;
+        }
+        .metric span:last-child {
+            color: #64ffda;
+            font-weight: bold;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background-color: #233554;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #64ffda;
+            width: 0%;
+            transition: width 0.5s ease;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        /* Spinner */
+        .spinner {
+            display: none;
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid rgba(100, 255, 218, 0.3);
+            border-radius: 50%;
+            border-top-color: #64ffda;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .copyright {
+            margin-top: 3rem;
+            color: #64ffda;
+            font-weight: normal;
+            font-size: 0.9rem;
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.3);
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 600px) {
+            body {
+                padding: 1rem;
+            }
+            .container {
+                padding: 1rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            h3 {
+                font-size: 1.2rem;
+            }
+            input[type="text"] {
+                width: 100%;
+                box-sizing: border-box; /* Ensure padding doesn't overflow width */
+            }
+            button {
+                width: 100%;
+                padding: 15px;
+            }
+        }
+    </style>
+    <script>
+        function startScraping(event) {
+            // Generate a random ID for this request
+            const reqId = 'req_' + Math.random().toString(36).substr(2, 9);
+            document.getElementById('req_id').value = reqId;
+            
+            // Show UI
+            document.getElementById('progress-ui').style.display = 'block';
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').innerText = 'Scraping in progress...';
+            
+            // Start Timers
+            const startTime = Date.now();
+            const timeEl = document.getElementById('timer');
+            
+            // Timer Interval
+            setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                timeEl.innerText = `${mins}m ${secs}s`;
+            }, 1000);
+            
+            // Polling Interval
+            setInterval(() => {
+                fetch('/progress/' + reqId)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('page-count').innerText = data.page;
+                        document.getElementById('prod-count').innerText = data.count;
+                        
+                        // Fake progress bar movement since we don't know total
+                        // Just keep it moving slowly or based on count
+                        let fakeProgress = (data.count % 100) + 10; 
+                        document.getElementById('prog-fill').style.width = fakeProgress + '%';
+                    })
+                    .catch(err => console.log(err));
+            }, 1000);
+            
+            // Allow form to submit normally
+            return true;
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>🕷️ Saad Web Scraper (SWS)</h1>
+        <h3>Modern Web Scraping Tool</h3>
+        
+        <div class="card">
+            <form action="/scrape" method="post" onsubmit="return startScraping(event)">
+                <input type="hidden" name="req_id" id="req_id">
+                <p>Enter the target URL below:</p>
+                <input type="text" name="url" placeholder="https://www.nahdionline.com/en-sa/..." required>
+                
+                <div style="margin-top: 15px; text-align: left; width: 80%; margin-left: auto; margin-right: auto;">
+                    <label style="color: #ccd6f6; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <input type="checkbox" name="headless" value="true" checked style="width: auto; margin-right: 10px;">
+                        Run in Background (Hidden)
+                    </label>
+                    <p style="font-size: 0.8em; color: #8892b0; text-align: center; margin-top: 5px;">
+                        Uncheck this if Al-Dawaa is blocking the connection.
+                    </p>
+                </div>
+
+                <br>
+                <button type="submit" id="submitBtn">Start Scraping</button>
+            </form>
+            
+            <div class="spinner" id="loadingSpinner"></div>
+
+            <div class="progress-container" id="progress-ui">
+                <div class="metric">
+                    <span>Time Elapsed:</span>
+                    <span id="timer">0m 0s</span>
+                </div>
+                <div class="metric">
+                    <span>Pages Scraped:</span>
+                    <span id="page-count">0</span>
+                </div>
+                <div class="metric">
+                    <span>Products Found:</span>
+                    <span id="prod-count">0</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="prog-fill"></div>
+                </div>
+            </div>
+
+            {% if error %}
+            <div class="error">
+                {{ error }}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="copyright">
+            &copy; 2025 Dr.Saad Naiem Ali
+        </div>
+    </div>
+</body>
+</html>

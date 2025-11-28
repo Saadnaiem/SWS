@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scraping Results - SWS</title>
+    <style>
+        body {
+            background-color: #0a192f;
+            color: #ccd6f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 2rem;
+        }
+        h1 {
+            color: #e6f1ff;
+            text-align: center;
+        }
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            max-width: 1200px;
+            margin: 0 auto 2rem auto;
+        }
+        .btn {
+            background-color: #64ffda;
+            color: #0a192f;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #4adbc8;
+        }
+        .btn-secondary {
+            background-color: transparent;
+            border: 1px solid #64ffda;
+            color: #64ffda;
+        }
+        .btn-secondary:hover {
+            background-color: rgba(100, 255, 218, 0.1);
+        }
+        .table-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            overflow-x: auto;
+            background-color: #112240;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 10px 30px -15px rgba(2,12,27,0.7);
+        }
+        table.data {
+            width: 100%;
+            border-collapse: collapse;
+            color: #8892b0;
+        }
+        table.data th {
+            background-color: #0a192f;
+            color: #64ffda;
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid #233554;
+        }
+        table.data td {
+            padding: 12px;
+            border-bottom: 1px solid #233554;
+        }
+        table.data tr:hover {
+            background-color: #1d2d50;
+        }
+        /* Custom Column Styles */
+        .col-regular-price {
+            color: #ffffff !important;
+            font-weight: bold;
+        }
+        .col-price-discount {
+            color: #ff6b6b !important;
+            font-weight: bold;
+        }
+        .col-discount-percent {
+            font-size: 0.85em !important;
+            color: #8892b0;
+        }
+        .col-product-name {
+            color: #ffffff !important;
+            font-weight: 500;
+        }
+        .col-price-without-discount {
+            color: #ffffff !important;
+            font-weight: bold;
+        }
+        .copyright {
+            margin-top: 3rem;
+            color: #64ffda;
+            font-weight: normal;
+            font-size: 0.9rem;
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.3);
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            .header-actions {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 1.5rem;
+            }
+            .header-actions > div {
+                width: 100%;
+                text-align: center;
+            }
+            .btn {
+                display: block;
+                width: 100%;
+                margin-bottom: 10px;
+                text-align: center;
+                box-sizing: border-box;
+            }
+            .btn:last-child {
+                margin-bottom: 0;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Scraping Results</h1>
+    
+    <div class="header-actions">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="color: #64ffda; font-size: 1.1em;">
+                <strong>Total Products:</strong> <span style="color: #ffffff; font-weight: bold;">{{ count }}</span>
+            </div>
+            <div style="color: #64ffda; font-size: 1.1em;">
+                <strong>Pages Scraped:</strong> <span style="color: #ffffff; font-weight: bold;">{{ pages }}</span>
+            </div>
+            <div style="color: #64ffda; font-size: 1.1em;">
+                <strong>Total Time Elapsed:</strong> <span style="color: #ffffff; font-weight: bold;">{{ time_elapsed }}</span>
+            </div>
+        </div>
+        <div>
+            <a href="/" class="btn btn-secondary">Start New Scraping</a>
+            <a href="/download?name={{ filename }}" class="btn">Download CSV</a>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="data">
+            <thead>
+                <tr>
+                    {% for col in columns %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    {% for col in columns %}
+                        {% if col == 'Discount %' %}
+                            <td class="col-discount-percent">
+                                {% if product[col] %}
+                                    {# Replace ' _ ' with <br> for display #}
+                                    <span style="color: #ff6b6b; font-weight: bold;">
+                                        {{ product[col].replace(' _ ', '<br>') | safe }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                        {% elif col == 'Regular Price' %}
+                            <td class="col-regular-price">{{ product[col] }}</td>
+                        {% elif col == 'Price After Discount' %}
+                            <td class="col-price-discount">{{ product[col] }}</td>
+                        {% elif col == 'Product Name' %}
+                            <td class="col-product-name">{{ product[col] }}</td>
+                        {% elif col == 'Price Without Discount' %}
+                            <td class="col-price-without-discount">{{ product[col] }}</td>
+                        {% elif col == 'Image Link' and product[col] %}
+                             <td><a href="{{ product[col] }}" target="_blank" style="color: #64ffda;">View</a></td>
+                        {% else %}
+                            <td>{{ product[col] }}</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="copyright">
+        &copy; 2025 Dr.Saad Naiem Ali
+    </div>
+</body>
+</html>
