@@ -4,3 +4,4 @@ undetected-chromedriver
 webdriver-manager
 pandas
 gunicorn
+setuptools
