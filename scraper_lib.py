@@ -59,6 +59,8 @@ def get_driver(headless=False):
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+        # Eager strategy speeds up page loads significantly
+        options.page_load_strategy = 'eager'
         
         if chrome_binary_path:
             print(f"Setting binary location to: {chrome_binary_path}")
