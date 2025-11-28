@@ -235,6 +235,15 @@ def scrape_nahdi(driver, base_url, status_callback=None):
             status_callback(page=page, count=len(products))
         
         driver.get(url)
+        
+        # Wait for products to appear (crucial for eager loading)
+        try:
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a.flex.h-full.flex-col"))
+            )
+        except:
+            pass
+            
         # Optimized sleep time for faster scraping
         time.sleep(random.uniform(2, 4))
         
@@ -247,7 +256,7 @@ def scrape_nahdi(driver, base_url, status_callback=None):
         for _ in range(3): 
             try:
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(1)
+                time.sleep(2) # Increased from 1s to 2s for better reliability
                 new_height = driver.execute_script("return document.body.scrollHeight")
                 if new_height == last_height:
                     break
