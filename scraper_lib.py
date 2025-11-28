@@ -229,17 +229,19 @@ def scrape_nahdi(driver, base_url, status_callback=None):
             status_callback(page=page, count=len(products))
         
         driver.get(url)
-        time.sleep(random.uniform(5, 8))
+        # Optimized sleep time for faster scraping
+        time.sleep(random.uniform(2, 4))
         
         try:
             last_height = driver.execute_script("return document.body.scrollHeight")
         except:
             last_height = 0
             
-        for _ in range(5): 
+        # Reduced scroll iterations and wait time
+        for _ in range(3): 
             try:
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(random.uniform(2, 3))
+                time.sleep(1)
                 new_height = driver.execute_script("return document.body.scrollHeight")
                 if new_height == last_height:
                     break
@@ -465,7 +467,8 @@ def scrape_aldawaa(driver, start_url, status_callback=None):
             
         try:
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(random.uniform(3, 6))
+            # Optimized sleep time
+            time.sleep(random.uniform(2, 3))
         except:
             pass
         
