@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# Suppress pip root user warning
+ENV PIP_ROOT_USER_ACTION=ignore
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
