@@ -43,11 +43,18 @@ def extract_category_from_url(url):
 def get_driver(headless=False):
     print("Attempting to initialize Chrome Driver...")
 
-    # Check for Render-specific Chrome path
-    chrome_binary_path = "/opt/render/project/.render/chrome/opt/google/chrome/google-chrome"
-    if not os.path.exists(chrome_binary_path):
-        # Fallback for local testing or other paths
-        chrome_binary_path = None
+    # Check for Render-specific Chrome path or Docker path
+    chrome_binary_path = None
+    possible_paths = [
+        "/opt/render/project/.render/chrome/opt/google/chrome/google-chrome", # Render Native
+        "/usr/bin/google-chrome", # Docker / Standard Linux
+        "/usr/bin/google-chrome-stable" # Alternative Linux
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            chrome_binary_path = path
+            break
 
     # Method 0: Undetected Chromedriver (Best for bypassing blocks)
     try:
